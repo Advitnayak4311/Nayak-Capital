@@ -52,10 +52,38 @@ export default function LoanDetailPage() {
 
   const fetchLoan = React.useCallback(async () => {
     setIsLoading(true);
+    // 1. Hydrate from localStorage
+    if (typeof window !== "undefined") {
+      try {
+        const cachedLoans = localStorage.getItem("nc_admin_loans");
+        if (cachedLoans) {
+          const loans: LoanRecord[] = JSON.parse(cachedLoans);
+          const match = loans.find(
+            (l) =>
+              l.loanId.toLowerCase() === loanId.toLowerCase() ||
+              l.id === loanId ||
+              l.applicationId?.toLowerCase() === loanId.toLowerCase()
+          );
+          if (match) {
+            setLoan(match);
+            if (match.schedule) {
+              const nextPending = match.schedule.find((s: any) => s.status !== "PAID");
+              if (nextPending) {
+                setPaymentAmount(nextPending.expectedAmount - nextPending.paidAmount);
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
     try {
-      const res = await fetch(`/api/loans/${loanId}/repayments`);
+      const res = await fetch(`/api/loans/${loanId}/repayments`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.ok && data.success && data.loan) {
         setLoan(data.loan);
         // Pre-fill next expected installment amount
         if (data.loan.schedule) {
