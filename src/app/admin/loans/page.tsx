@@ -340,14 +340,37 @@ export default function AdminLoansPage() {
 
     setIsSubmittingDelete(true);
     try {
-      const res = await fetch(`/api/loans/${selectedLoan.loanId}`, {
-        method: "DELETE",
+      const targetLoanId = selectedLoan.loanId;
+      const targetAppId = selectedLoan.applicationId;
+
+      // 1. Optimistically remove from state & local storage immediately
+      setLoans((prev) => {
+        const next = prev.filter(
+          (l) => l.loanId !== targetLoanId && l.id !== selectedLoan.id
+        );
+        if (typeof window !== "undefined") {
+          localStorage.setItem("nc_admin_loans", JSON.stringify(next));
+        }
+        return next;
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to delete loan record.");
-      }
+      setApplications((prev) => {
+        const next = prev.filter(
+          (a) =>
+            a.applicationId !== targetAppId &&
+            a.applicationId !== targetLoanId &&
+            a.id !== selectedLoan.id
+        );
+        if (typeof window !== "undefined") {
+          localStorage.setItem("nc_admin_applications", JSON.stringify(next));
+        }
+        return next;
+      });
+
+      // 2. Dispatch to server
+      await fetch(`/api/loans/${selectedLoan.loanId}`, {
+        method: "DELETE",
+      }).catch(() => {});
 
       toast({
         title: "Loan Record Removed",

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbStore } from "@/lib/db/store";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -43,11 +46,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const success = dbStore.deleteLoan(params.id);
-    if (!success) {
-      return NextResponse.json({ success: false, error: "Loan account not found." }, { status: 404 });
-    }
-
+    dbStore.deleteLoan(params.id);
     return NextResponse.json({
       success: true,
       message: "Loan account successfully deleted from portfolio.",

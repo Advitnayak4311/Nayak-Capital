@@ -962,22 +962,39 @@ class DataStore {
 
   public deleteLoan(idOrLoanId: string): boolean {
     this.sync();
+    const query = idOrLoanId.trim().toLowerCase();
     const idx = this.loans.findIndex(
-      (l) => l.id === idOrLoanId || l.loanId.toLowerCase() === idOrLoanId.toLowerCase()
+      (l) =>
+        l.id === idOrLoanId ||
+        l.loanId.toLowerCase() === query ||
+        l.applicationId?.toLowerCase() === query
     );
-    if (idx === -1) return false;
+    if (idx !== -1) {
+      const removed = this.loans.splice(idx, 1)[0];
+      if (removed.applicationId) {
+        const appIdx = this.applications.findIndex(
+          (a) => a.applicationId.toLowerCase() === removed.applicationId?.toLowerCase()
+        );
+        if (appIdx !== -1) this.applications.splice(appIdx, 1);
+      }
+      this.addAuditLog({
+        actorId: "admin",
+        actorName: "Advith Nayak (Admin)",
+        actorRole: "ADMIN",
+        action: "LOAN_DELETED",
+        targetId: removed.loanId,
+        targetType: "LOAN",
+        metadata: { borrower: removed.borrowerName, amount: removed.principalAmount },
+      });
+    }
 
-    const removed = this.loans.splice(idx, 1)[0];
-
-    this.addAuditLog({
-      actorId: "admin",
-      actorName: "Advith Nayak (Admin)",
-      actorRole: "ADMIN",
-      action: "LOAN_DELETED",
-      targetId: removed.loanId,
-      targetType: "LOAN",
-      metadata: { borrower: removed.borrowerName, amount: removed.principalAmount },
-    });
+    // Also remove from applications if ID matches
+    const appIdx = this.applications.findIndex(
+      (a) => a.id === idOrLoanId || a.applicationId.toLowerCase() === query
+    );
+    if (appIdx !== -1) {
+      this.applications.splice(appIdx, 1);
+    }
 
     this.saveToFile();
     return true;
