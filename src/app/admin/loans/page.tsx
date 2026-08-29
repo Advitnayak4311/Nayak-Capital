@@ -133,9 +133,14 @@ export default function AdminLoansPage() {
         throw new Error(data.error || "Failed to create loan record.");
       }
 
+      if (data.loan) {
+        setLoans((prev) => [data.loan, ...prev.filter((l) => l.loanId !== data.loan.loanId)]);
+      }
+      setActiveTab("loans");
+
       toast({
         title: "Loan Record Created",
-        description: `Loan account ${data.loan.loanId} for ${data.loan.borrowerName} is now active.`,
+        description: `Loan account ${data.loan.loanId} for ${data.loan.borrowerName} is now active in the ledger.`,
         type: "success",
       });
 

@@ -103,7 +103,21 @@ class DataStore {
   }
 
   private sync(): void {
-    if (!this.isLoaded) {
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        const raw = fs.readFileSync(DB_FILE, "utf-8");
+        if (raw && raw.trim()) {
+          const parsed: DatabaseSchema = JSON.parse(raw);
+          if (Array.isArray(parsed.applications)) this.applications = parsed.applications;
+          if (Array.isArray(parsed.agreements)) this.agreements = parsed.agreements;
+          if (Array.isArray(parsed.loans)) this.loans = parsed.loans;
+          if (Array.isArray(parsed.auditLogs)) this.auditLogs = parsed.auditLogs;
+          if (Array.isArray(parsed.emailLogs)) this.emailLogs = parsed.emailLogs;
+        }
+      } catch (err) {
+        console.warn("Notice: Sync using in-memory state:", err);
+      }
+    } else if (!this.isLoaded) {
       this.loadFromFile();
     }
   }
@@ -869,6 +883,4 @@ declare global {
 }
 
 export const dbStore: DataStore = global.globalDataStore || new DataStore();
-if (process.env.NODE_ENV !== "production") {
-  global.globalDataStore = dbStore;
-}
+global.globalDataStore = dbStore;
