@@ -73,8 +73,8 @@ export default function AdminLoansPage() {
     setIsLoading(true);
     try {
       const [loansRes, appsRes] = await Promise.all([
-        fetch("/api/loans"),
-        fetch("/api/applications"),
+        fetch("/api/loans", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
+        fetch("/api/applications", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
       ]);
 
       const [loansData, appsData] = await Promise.all([

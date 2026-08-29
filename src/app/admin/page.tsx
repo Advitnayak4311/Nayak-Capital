@@ -28,18 +28,18 @@ export default function AdminDashboardPage() {
     setIsLoading(true);
     try {
       const [appRes, statRes, loanRes] = await Promise.all([
-        fetch("/api/applications"),
-        fetch("/api/admin/stats"),
-        fetch("/api/loans"),
+        fetch("/api/applications", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
+        fetch("/api/admin/stats", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
+        fetch("/api/loans", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
       ]);
 
       const appData = await appRes.json();
       const statData = await statRes.json();
       const loanData = await loanRes.json();
 
-      if (appData.success) setApplications(appData.applications);
-      if (statData.success) setStats(statData.stats);
-      if (loanData.success) setLoans(loanData.loans);
+      if (appData.success && Array.isArray(appData.applications)) setApplications(appData.applications);
+      if (statData.success && statData.stats) setStats(statData.stats);
+      if (loanData.success && Array.isArray(loanData.loans)) setLoans(loanData.loans);
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {
@@ -56,9 +56,15 @@ export default function AdminDashboardPage() {
   const pendingCount = applications.filter(
     (a) => a.status === "SUBMITTED" || a.status === "UNDER_REVIEW"
   ).length || (stats?.pendingReview ?? 0);
-  const activeCount = loans.filter((l) => l.status === "ACTIVE" || l.status === "PARTIALLY_PAID").length || loans.length;
-  const disbursedTotal = loans.reduce((sum, l) => sum + (Number(l.principalAmount) || 0), 0) || (stats?.totalDisbursed ?? 0);
-  const collectedTotal = loans.reduce((sum, l) => sum + (Number(l.totalPaid) || 0), 0) || (stats?.totalCollected ?? 0);
+  const activeCount = loans.length > 0 
+    ? loans.filter((l) => l.status === "ACTIVE" || l.status === "PARTIALLY_PAID").length || loans.length
+    : (stats?.activeLoans ?? 0);
+  const disbursedTotal = loans.length > 0
+    ? loans.reduce((sum, l) => sum + (Number(l.principalAmount) || 0), 0)
+    : (stats?.totalDisbursed ?? 0);
+  const collectedTotal = loans.length > 0
+    ? loans.reduce((sum, l) => sum + (Number(l.totalPaid) || 0), 0)
+    : (stats?.totalCollected ?? 0);
 
   return (
     <div className="space-y-8">
