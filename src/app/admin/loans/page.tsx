@@ -311,7 +311,33 @@ export default function AdminLoansPage() {
     }
   };
 
-  const filteredLoans = loans.filter((loan) => {
+  const effectiveLoans = React.useMemo(() => {
+    if (loans.length > 0) return loans;
+    return applications.map((app) => ({
+      id: app.id,
+      loanId: app.applicationId.replace("NC-APP-", "NC-LN-"),
+      applicationId: app.applicationId,
+      borrowerName: app.borrower.fullName,
+      borrowerMobile: app.borrower.mobile,
+      borrowerEmail: app.borrower.email,
+      principalAmount: app.loan.amount,
+      interestRateAnnual: app.loan.proposedInterestRateAnnual || (app.loan.tenureMonths <= 3 ? 13.5 : 14.7),
+      totalPayable: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
+      totalPaid: 0,
+      outstandingBalance: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
+      tenureMonths: app.loan.tenureMonths,
+      disbursementDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
+      repaymentFrequency: app.loan.repaymentFrequency || "MONTHLY",
+      nextDueDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
+      status: (app.status === "ACTIVE" ? "ACTIVE" : (app.status === "SUBMITTED" ? "ACTIVE" : app.status)) as LoanStatus,
+      schedule: [],
+      repayments: [],
+      createdAt: app.createdAt,
+      updatedAt: app.updatedAt,
+    }));
+  }, [loans, applications]);
+
+  const filteredLoans = effectiveLoans.filter((loan) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -433,7 +459,7 @@ export default function AdminLoansPage() {
             }`}
           >
             <Landmark className="h-4 w-4" />
-            <span>Active Loans & Ledgers ({loans.length})</span>
+            <span>Active Loans & Ledgers ({effectiveLoans.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("applications")}

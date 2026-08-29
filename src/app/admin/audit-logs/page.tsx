@@ -13,9 +13,12 @@ export default function AuditLogsPage() {
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/audit-logs");
+      const res = await fetch("/api/audit-logs", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.logs)) {
         setLogs(data.logs);
       }
     } catch (err) {

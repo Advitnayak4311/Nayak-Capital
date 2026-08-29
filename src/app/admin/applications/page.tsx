@@ -19,9 +19,12 @@ export default function AdminApplicationsPage() {
   const fetchApplications = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/applications");
+      const res = await fetch("/api/applications", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && Array.isArray(data.applications)) {
         setApplications(data.applications);
       }
     } catch (err) {

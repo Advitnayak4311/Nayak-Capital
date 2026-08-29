@@ -52,19 +52,39 @@ export default function AdminDashboardPage() {
   }, []);
 
   // Live reactive metrics computed directly from state
-  const totalAppsCount = Math.max(applications.length, stats?.totalApplications ?? 0);
+  const effectiveLoans = React.useMemo(() => {
+    if (loans.length > 0) return loans;
+    return applications.map((app) => ({
+      id: app.id,
+      loanId: app.applicationId.replace("NC-APP-", "NC-LN-"),
+      applicationId: app.applicationId,
+      borrowerName: app.borrower.fullName,
+      borrowerMobile: app.borrower.mobile,
+      borrowerEmail: app.borrower.email,
+      principalAmount: app.loan.amount,
+      interestRateAnnual: app.loan.proposedInterestRateAnnual || (app.loan.tenureMonths <= 3 ? 13.5 : 14.7),
+      totalPayable: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
+      totalPaid: 0,
+      outstandingBalance: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
+      tenureMonths: app.loan.tenureMonths,
+      disbursementDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
+      repaymentFrequency: app.loan.repaymentFrequency || "MONTHLY",
+      nextDueDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
+      status: "ACTIVE" as const,
+      schedule: [],
+      repayments: [],
+      createdAt: app.createdAt,
+      updatedAt: app.updatedAt,
+    }));
+  }, [loans, applications]);
+
+  const totalAppsCount = applications.length;
   const pendingCount = applications.filter(
     (a) => a.status === "SUBMITTED" || a.status === "UNDER_REVIEW"
-  ).length || (stats?.pendingReview ?? 0);
-  const activeCount = loans.length > 0 
-    ? loans.filter((l) => l.status === "ACTIVE" || l.status === "PARTIALLY_PAID").length || loans.length
-    : (stats?.activeLoans ?? 0);
-  const disbursedTotal = loans.length > 0
-    ? loans.reduce((sum, l) => sum + (Number(l.principalAmount) || 0), 0)
-    : (stats?.totalDisbursed ?? 0);
-  const collectedTotal = loans.length > 0
-    ? loans.reduce((sum, l) => sum + (Number(l.totalPaid) || 0), 0)
-    : (stats?.totalCollected ?? 0);
+  ).length;
+  const activeCount = effectiveLoans.length;
+  const disbursedTotal = effectiveLoans.reduce((sum, l) => sum + (Number(l.principalAmount) || 0), 0);
+  const collectedTotal = effectiveLoans.reduce((sum, l) => sum + (Number(l.totalPaid) || 0), 0);
 
   return (
     <div className="space-y-8">
@@ -185,7 +205,7 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
 
-        {loans.length === 0 ? (
+        {effectiveLoans.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-charcoal-750 rounded-2xl">
             <p className="text-xs text-slate-400">No active loans recorded yet.</p>
             <Link href="/admin/loans" className="inline-block mt-3">
@@ -210,7 +230,7 @@ export default function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-charcoal-800/60">
-                {loans.slice(0, 5).map((loan) => (
+                {effectiveLoans.slice(0, 5).map((loan) => (
                   <tr key={loan.id} className="hover:bg-charcoal-850/60 transition-colors">
                     <td className="py-3.5 font-mono font-bold text-gold-300">
                       {loan.loanId}
