@@ -72,6 +72,24 @@ export default function AdminLoansPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      // 1. Instant hydration from persistent local storage
+      if (typeof window !== "undefined") {
+        const cachedLoans = localStorage.getItem("nc_admin_loans");
+        const cachedApps = localStorage.getItem("nc_admin_applications");
+        if (cachedLoans) {
+          try {
+            const parsed = JSON.parse(cachedLoans);
+            if (Array.isArray(parsed) && parsed.length > 0) setLoans(parsed);
+          } catch (e) {}
+        }
+        if (cachedApps) {
+          try {
+            const parsed = JSON.parse(cachedApps);
+            if (Array.isArray(parsed) && parsed.length > 0) setApplications(parsed);
+          } catch (e) {}
+        }
+      }
+
       const [loansRes, appsRes] = await Promise.all([
         fetch("/api/loans", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
         fetch("/api/applications", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
@@ -82,12 +100,45 @@ export default function AdminLoansPage() {
         appsRes.json(),
       ]);
 
-      if (loansData.success) {
-        setLoans(loansData.loans || []);
+      let currentLoans: LoanRecord[] = [];
+      let currentApps: LoanApplication[] = [];
+
+      if (loansData.success && Array.isArray(loansData.loans)) {
+        currentLoans = loansData.loans;
       }
-      if (appsData.success) {
-        setApplications(appsData.applications || []);
+      if (appsData.success && Array.isArray(appsData.applications)) {
+        currentApps = appsData.applications;
       }
+
+      // Merge with localStorage if backend cold-started empty
+      if (typeof window !== "undefined") {
+        const cachedLoans = localStorage.getItem("nc_admin_loans");
+        if (cachedLoans && currentLoans.length === 0) {
+          try {
+            const parsed: LoanRecord[] = JSON.parse(cachedLoans);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              currentLoans = parsed;
+              // Re-seed backend in background
+              for (const l of parsed) {
+                fetch("/api/loans", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(l),
+                }).catch(() => {});
+              }
+            }
+          } catch (e) {}
+        } else if (currentLoans.length > 0) {
+          localStorage.setItem("nc_admin_loans", JSON.stringify(currentLoans));
+        }
+
+        if (currentApps.length > 0) {
+          localStorage.setItem("nc_admin_applications", JSON.stringify(currentApps));
+        }
+      }
+
+      setLoans(currentLoans);
+      setApplications(currentApps);
     } catch (err) {
       console.error("Failed to load portfolio data:", err);
     } finally {
@@ -134,7 +185,13 @@ export default function AdminLoansPage() {
       }
 
       if (data.loan) {
-        setLoans((prev) => [data.loan, ...prev.filter((l) => l.loanId !== data.loan.loanId)]);
+        setLoans((prev) => {
+          const updated = [data.loan, ...prev.filter((l) => l.loanId !== data.loan.loanId)];
+          if (typeof window !== "undefined") {
+            localStorage.setItem("nc_admin_loans", JSON.stringify(updated));
+          }
+          return updated;
+        });
       }
       setActiveTab("loans");
 

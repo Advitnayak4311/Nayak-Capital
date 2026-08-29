@@ -27,6 +27,24 @@ export default function AdminDashboardPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      // 1. Instant hydration from persistent local storage
+      if (typeof window !== "undefined") {
+        const cachedLoans = localStorage.getItem("nc_admin_loans");
+        const cachedApps = localStorage.getItem("nc_admin_applications");
+        if (cachedLoans) {
+          try {
+            const parsed = JSON.parse(cachedLoans);
+            if (Array.isArray(parsed) && parsed.length > 0) setLoans(parsed);
+          } catch (e) {}
+        }
+        if (cachedApps) {
+          try {
+            const parsed = JSON.parse(cachedApps);
+            if (Array.isArray(parsed) && parsed.length > 0) setApplications(parsed);
+          } catch (e) {}
+        }
+      }
+
       const [appRes, statRes, loanRes] = await Promise.all([
         fetch("/api/applications", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
         fetch("/api/admin/stats", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
@@ -37,9 +55,41 @@ export default function AdminDashboardPage() {
       const statData = await statRes.json();
       const loanData = await loanRes.json();
 
-      if (appData.success && Array.isArray(appData.applications)) setApplications(appData.applications);
+      let currentLoans: LoanRecord[] = [];
+      let currentApps: LoanApplication[] = [];
+
+      if (appData.success && Array.isArray(appData.applications)) currentApps = appData.applications;
       if (statData.success && statData.stats) setStats(statData.stats);
-      if (loanData.success && Array.isArray(loanData.loans)) setLoans(loanData.loans);
+      if (loanData.success && Array.isArray(loanData.loans)) currentLoans = loanData.loans;
+
+      // Merge with localStorage if backend cold-started empty
+      if (typeof window !== "undefined") {
+        const cachedLoans = localStorage.getItem("nc_admin_loans");
+        if (cachedLoans && currentLoans.length === 0) {
+          try {
+            const parsed: LoanRecord[] = JSON.parse(cachedLoans);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              currentLoans = parsed;
+              for (const l of parsed) {
+                fetch("/api/loans", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(l),
+                }).catch(() => {});
+              }
+            }
+          } catch (e) {}
+        } else if (currentLoans.length > 0) {
+          localStorage.setItem("nc_admin_loans", JSON.stringify(currentLoans));
+        }
+
+        if (currentApps.length > 0) {
+          localStorage.setItem("nc_admin_applications", JSON.stringify(currentApps));
+        }
+      }
+
+      setApplications(currentApps);
+      setLoans(currentLoans);
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {
