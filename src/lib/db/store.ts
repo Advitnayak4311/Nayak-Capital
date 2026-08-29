@@ -767,6 +767,78 @@ class DataStore {
 
     this.loans.unshift(newLoan);
 
+    // Auto-create linked application record for complete cross-platform visibility
+    const newApp: LoanApplication = {
+      id: `app-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      applicationId: appId,
+      borrower: {
+        fullName: data.borrowerName,
+        dob: "1990-01-01",
+        fatherOrSpouseName: "Officer Verified",
+        mobile: data.borrowerMobile,
+        email: data.borrowerEmail,
+        currentAddress: "Direct Institutional Disbursal",
+        permanentAddress: "Direct Institutional Disbursal",
+        occupation: "Direct Portfolio Client",
+      },
+      loan: {
+        productId: "personal-loan",
+        productName: "Personal Loan",
+        amount: data.principalAmount,
+        tenureMonths: data.tenureMonths,
+        purpose: data.notes || "Direct Institutional Facility",
+        repaymentFrequency: data.repaymentFrequency || "MONTHLY",
+        proposedDisbursementDate: data.disbursementDate,
+        proposedInterestRateAnnual: data.interestRateAnnual,
+        proposedProcessingFeePercent: 1.5,
+        calculationMethod: "REDUCING_BALANCE",
+        estimatedEMI: installmentAmount,
+        estimatedTotalPayable: totalPayable,
+      },
+      kyc: {
+        documentType: "AADHAAR",
+        documentNumber: "Direct Officer Verified",
+        panNumber: "Direct Officer Verified",
+      },
+      income: {
+        occupationType: "SALARIED",
+        monthlyIncome: data.principalAmount * 2,
+        primaryBankName: "Direct Disbursal",
+        primaryAccountNumber: "Direct Client Account",
+        ifscCode: "INST00001",
+        disbursementMode: "BANK_TRANSFER",
+      },
+      guarantor: {
+        hasGuarantor: false,
+      },
+      documents: [],
+      agreementId: newLoan.agreementId,
+      status: "ACTIVE",
+      statusHistory: [
+        {
+          status: "ACTIVE",
+          changedBy: "Advith Nayak (Admin)",
+          changedAt: now,
+          note: `Direct Client Disbursal. Account ID: ${loanId}`,
+        },
+      ],
+      adminNotes: data.notes
+        ? [
+            {
+              id: `note-${Date.now()}`,
+              authorId: "admin",
+              authorName: "Advith Nayak",
+              content: data.notes,
+              createdAt: now,
+            },
+          ]
+        : [],
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.applications.unshift(newApp);
+
     this.addAuditLog({
       actorId: "admin",
       actorName: "Advith Nayak (Admin)",
