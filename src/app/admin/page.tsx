@@ -51,6 +51,15 @@ export default function AdminDashboardPage() {
     fetchData();
   }, []);
 
+  // Live reactive metrics computed directly from state
+  const totalAppsCount = Math.max(applications.length, stats?.totalApplications ?? 0);
+  const pendingCount = applications.filter(
+    (a) => a.status === "SUBMITTED" || a.status === "UNDER_REVIEW"
+  ).length || (stats?.pendingReview ?? 0);
+  const activeCount = loans.filter((l) => l.status === "ACTIVE" || l.status === "PARTIALLY_PAID").length || loans.length;
+  const disbursedTotal = loans.reduce((sum, l) => sum + (Number(l.principalAmount) || 0), 0) || (stats?.totalDisbursed ?? 0);
+  const collectedTotal = loans.reduce((sum, l) => sum + (Number(l.totalPaid) || 0), 0) || (stats?.totalCollected ?? 0);
+
   return (
     <div className="space-y-8">
       {/* Top Header */}
@@ -95,7 +104,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-serif font-bold text-white">
-            {stats?.totalApplications ?? applications.length}
+            {totalAppsCount}
           </div>
           <p className="text-[11px] text-slate-400">Lifetime submissions recorded</p>
         </div>
@@ -110,7 +119,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-serif font-bold text-gold-300">
-            {stats?.pendingReview ?? 0}
+            {pendingCount}
           </div>
           <p className="text-[11px] text-amber-400/80">Requires credit appraisal & review</p>
         </div>
@@ -125,7 +134,7 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-serif font-bold text-white">
-            {stats?.activeLoans ?? loans.length}
+            {activeCount}
           </div>
           <p className="text-[11px] text-slate-400">Currently servicing debt facilities</p>
         </div>
@@ -140,10 +149,10 @@ export default function AdminDashboardPage() {
             </div>
           </div>
           <div className="text-xl sm:text-2xl font-mono font-bold text-emerald-300">
-            {formatCurrency(stats?.totalDisbursed ?? 0)}
+            {formatCurrency(disbursedTotal)}
           </div>
           <p className="text-[11px] text-slate-400">
-            Collected: {formatCurrency(stats?.totalCollected ?? 0)}
+            Collected: {formatCurrency(collectedTotal)}
           </p>
         </div>
       </div>

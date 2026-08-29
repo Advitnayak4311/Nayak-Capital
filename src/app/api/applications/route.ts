@@ -5,6 +5,9 @@ import { generateApplicationId, calculateEMI } from "@/lib/utils";
 import { sendApplicationSubmittedNotifications } from "@/lib/email/emailService";
 import { LoanApplication } from "@/lib/models/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: NextRequest) {
   try {
     const applications = dbStore.getApplications();
