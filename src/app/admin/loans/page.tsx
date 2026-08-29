@@ -105,34 +105,13 @@ export default function AdminLoansPage() {
 
       if (loansData.success && Array.isArray(loansData.loans)) {
         currentLoans = loansData.loans;
+        if (typeof window !== "undefined") {
+          localStorage.setItem("nc_admin_loans", JSON.stringify(currentLoans));
+        }
       }
       if (appsData.success && Array.isArray(appsData.applications)) {
         currentApps = appsData.applications;
-      }
-
-      // Merge with localStorage if backend cold-started empty
-      if (typeof window !== "undefined") {
-        const cachedLoans = localStorage.getItem("nc_admin_loans");
-        if (cachedLoans && currentLoans.length === 0) {
-          try {
-            const parsed: LoanRecord[] = JSON.parse(cachedLoans);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              currentLoans = parsed;
-              // Re-seed backend in background
-              for (const l of parsed) {
-                fetch("/api/loans", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(l),
-                }).catch(() => {});
-              }
-            }
-          } catch (e) {}
-        } else if (currentLoans.length > 0) {
-          localStorage.setItem("nc_admin_loans", JSON.stringify(currentLoans));
-        }
-
-        if (currentApps.length > 0) {
+        if (typeof window !== "undefined") {
           localStorage.setItem("nc_admin_applications", JSON.stringify(currentApps));
         }
       }
@@ -391,33 +370,9 @@ export default function AdminLoansPage() {
     }
   };
 
-  const effectiveLoans = React.useMemo(() => {
-    if (loans.length > 0) return loans;
-    return applications.map((app) => ({
-      id: app.id,
-      loanId: app.applicationId.replace("NC-APP-", "NC-LN-"),
-      applicationId: app.applicationId,
-      borrowerName: app.borrower.fullName,
-      borrowerMobile: app.borrower.mobile,
-      borrowerEmail: app.borrower.email,
-      principalAmount: app.loan.amount,
-      interestRateAnnual: app.loan.proposedInterestRateAnnual || (app.loan.tenureMonths <= 3 ? 13.5 : 14.7),
-      totalPayable: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
-      totalPaid: 0,
-      outstandingBalance: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
-      tenureMonths: app.loan.tenureMonths,
-      disbursementDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
-      repaymentFrequency: app.loan.repaymentFrequency || "MONTHLY",
-      nextDueDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
-      status: (app.status === "ACTIVE" ? "ACTIVE" : (app.status === "SUBMITTED" ? "ACTIVE" : app.status)) as LoanStatus,
-      schedule: [],
-      repayments: [],
-      createdAt: app.createdAt,
-      updatedAt: app.updatedAt,
-    }));
-  }, [loans, applications]);
+  const effectiveLoans = loans;
 
-  const filteredLoans = effectiveLoans.filter((loan) => {
+  const filteredLoans = loans.filter((loan) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (

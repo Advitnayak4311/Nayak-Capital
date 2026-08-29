@@ -16,6 +16,7 @@ import {
   AlertCircle,
   ShieldCheck,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 
 export default function AdminDashboardPage() {
@@ -27,24 +28,6 @@ export default function AdminDashboardPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // 1. Instant hydration from persistent local storage
-      if (typeof window !== "undefined") {
-        const cachedLoans = localStorage.getItem("nc_admin_loans");
-        const cachedApps = localStorage.getItem("nc_admin_applications");
-        if (cachedLoans) {
-          try {
-            const parsed = JSON.parse(cachedLoans);
-            if (Array.isArray(parsed) && parsed.length > 0) setLoans(parsed);
-          } catch (e) {}
-        }
-        if (cachedApps) {
-          try {
-            const parsed = JSON.parse(cachedApps);
-            if (Array.isArray(parsed) && parsed.length > 0) setApplications(parsed);
-          } catch (e) {}
-        }
-      }
-
       const [appRes, statRes, loanRes] = await Promise.all([
         fetch("/api/applications", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
         fetch("/api/admin/stats", { cache: "no-store", headers: { "Cache-Control": "no-cache" } }),
@@ -58,33 +41,21 @@ export default function AdminDashboardPage() {
       let currentLoans: LoanRecord[] = [];
       let currentApps: LoanApplication[] = [];
 
-      if (appData.success && Array.isArray(appData.applications)) currentApps = appData.applications;
-      if (statData.success && statData.stats) setStats(statData.stats);
-      if (loanData.success && Array.isArray(loanData.loans)) currentLoans = loanData.loans;
-
-      // Merge with localStorage if backend cold-started empty
-      if (typeof window !== "undefined") {
-        const cachedLoans = localStorage.getItem("nc_admin_loans");
-        if (cachedLoans && currentLoans.length === 0) {
-          try {
-            const parsed: LoanRecord[] = JSON.parse(cachedLoans);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              currentLoans = parsed;
-              for (const l of parsed) {
-                fetch("/api/loans", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(l),
-                }).catch(() => {});
-              }
-            }
-          } catch (e) {}
-        } else if (currentLoans.length > 0) {
-          localStorage.setItem("nc_admin_loans", JSON.stringify(currentLoans));
-        }
-
-        if (currentApps.length > 0) {
+      if (appData.success && Array.isArray(appData.applications)) {
+        currentApps = appData.applications;
+        if (typeof window !== "undefined") {
           localStorage.setItem("nc_admin_applications", JSON.stringify(currentApps));
+        }
+      }
+
+      if (statData.success && statData.stats) {
+        setStats(statData.stats);
+      }
+
+      if (loanData.success && Array.isArray(loanData.loans)) {
+        currentLoans = loanData.loans;
+        if (typeof window !== "undefined") {
+          localStorage.setItem("nc_admin_loans", JSON.stringify(currentLoans));
         }
       }
 
@@ -101,40 +72,40 @@ export default function AdminDashboardPage() {
     fetchData();
   }, []);
 
-  // Live reactive metrics computed directly from state
-  const effectiveLoans = React.useMemo(() => {
-    if (loans.length > 0) return loans;
-    return applications.map((app) => ({
-      id: app.id,
-      loanId: app.applicationId.replace("NC-APP-", "NC-LN-"),
-      applicationId: app.applicationId,
-      borrowerName: app.borrower.fullName,
-      borrowerMobile: app.borrower.mobile,
-      borrowerEmail: app.borrower.email,
-      principalAmount: app.loan.amount,
-      interestRateAnnual: app.loan.proposedInterestRateAnnual || (app.loan.tenureMonths <= 3 ? 13.5 : 14.7),
-      totalPayable: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
-      totalPaid: 0,
-      outstandingBalance: app.loan.estimatedTotalPayable || (app.loan.amount + Math.round(app.loan.amount * ((app.loan.proposedInterestRateAnnual || 13.5) / 100))),
-      tenureMonths: app.loan.tenureMonths,
-      disbursementDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
-      repaymentFrequency: app.loan.repaymentFrequency || "MONTHLY",
-      nextDueDate: (app.loan.proposedDisbursementDate || app.createdAt).split("T")[0],
-      status: "ACTIVE" as const,
-      schedule: [],
-      repayments: [],
-      createdAt: app.createdAt,
-      updatedAt: app.updatedAt,
-    }));
-  }, [loans, applications]);
+  const handleDeleteLoanDirect = async (loan: LoanRecord) => {
+    const targetLoanId = loan.loanId;
+    const targetAppId = loan.applicationId;
 
+    // Immediately remove from UI and localStorage
+    setLoans((prev) => {
+      const next = prev.filter((l) => l.loanId !== targetLoanId && l.id !== loan.id);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("nc_admin_loans", JSON.stringify(next));
+      }
+      return next;
+    });
+
+    setApplications((prev) => {
+      const next = prev.filter(
+        (a) => a.applicationId !== targetAppId && a.applicationId !== targetLoanId && a.id !== loan.id
+      );
+      if (typeof window !== "undefined") {
+        localStorage.setItem("nc_admin_applications", JSON.stringify(next));
+      }
+      return next;
+    });
+
+    await fetch(`/api/loans/${loan.loanId}`, { method: "DELETE" }).catch(() => {});
+  };
+
+  // Live reactive metrics computed directly from state
   const totalAppsCount = applications.length;
   const pendingCount = applications.filter(
     (a) => a.status === "SUBMITTED" || a.status === "UNDER_REVIEW"
   ).length;
-  const activeCount = effectiveLoans.length;
-  const disbursedTotal = effectiveLoans.reduce((sum, l) => sum + (Number(l.principalAmount) || 0), 0);
-  const collectedTotal = effectiveLoans.reduce((sum, l) => sum + (Number(l.totalPaid) || 0), 0);
+  const activeCount = loans.length;
+  const disbursedTotal = loans.reduce((sum, l) => sum + (Number(l.principalAmount) || 0), 0);
+  const collectedTotal = loans.reduce((sum, l) => sum + (Number(l.totalPaid) || 0), 0);
 
   return (
     <div className="space-y-8">
@@ -255,7 +226,7 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
 
-        {effectiveLoans.length === 0 ? (
+        {loans.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-charcoal-750 rounded-2xl">
             <p className="text-xs text-slate-400">No active loans recorded yet.</p>
             <Link href="/admin/loans" className="inline-block mt-3">
@@ -280,7 +251,7 @@ export default function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-charcoal-800/60">
-                {effectiveLoans.slice(0, 5).map((loan) => (
+                {loans.slice(0, 5).map((loan) => (
                   <tr key={loan.id} className="hover:bg-charcoal-850/60 transition-colors">
                     <td className="py-3.5 font-mono font-bold text-gold-300">
                       {loan.loanId}
@@ -312,11 +283,20 @@ export default function AdminDashboardPage() {
                       </span>
                     </td>
                     <td className="py-3.5 text-right">
-                      <Link href={`/admin/loans/${loan.loanId}`}>
-                        <Button variant="secondary" size="sm" className="text-[11px] h-7 px-2.5">
-                          Ledger &rarr;
-                        </Button>
-                      </Link>
+                      <div className="flex items-center justify-end space-x-1.5">
+                        <Link href={`/admin/loans/${loan.loanId}`}>
+                          <Button variant="secondary" size="sm" className="text-[11px] h-7 px-2.5">
+                            Ledger &rarr;
+                          </Button>
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteLoanDirect(loan)}
+                          className="h-7 w-7 rounded-lg border border-charcoal-700 bg-charcoal-900 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 flex items-center justify-center transition-colors"
+                          title="Delete Loan Account"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
