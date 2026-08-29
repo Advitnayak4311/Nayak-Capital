@@ -133,12 +133,94 @@ class DataStore {
   public getApplicationById(idOrAppId: string): LoanApplication | undefined {
     this.sync();
     const query = idOrAppId.trim().toLowerCase();
-    return this.applications.find(
+    const existing = this.applications.find(
       (app) =>
         app.id === idOrAppId ||
         app.applicationId.toLowerCase() === query ||
         (app.agreementId && app.agreementId.toLowerCase() === query)
     );
+    if (existing) return existing;
+
+    // Check if there is a matching loan record
+    const loan = this.loans.find(
+      (l) =>
+        l.id === idOrAppId ||
+        l.loanId.toLowerCase() === query ||
+        l.applicationId?.toLowerCase() === query ||
+        (l.agreementId && l.agreementId.toLowerCase() === query)
+    );
+
+    if (loan) {
+      const now = loan.createdAt || new Date().toISOString();
+      const rate = loan.interestRateAnnual || (loan.tenureMonths <= 3 ? 13.5 : 14.7);
+      const { emi, totalPayable } = calculateEMI(loan.principalAmount, rate, loan.tenureMonths);
+
+      const synthesizedApp: LoanApplication = {
+        id: `app-${loan.id}`,
+        applicationId: loan.applicationId || `NC-APP-${loan.loanId.replace("NC-LN-", "")}`,
+        borrower: {
+          fullName: loan.borrowerName,
+          dob: "1990-01-01",
+          fatherOrSpouseName: "Direct Disbursal",
+          mobile: loan.borrowerMobile,
+          email: loan.borrowerEmail,
+          currentAddress: "Direct Institutional Facility",
+          permanentAddress: "Direct Institutional Facility",
+          occupation: "Direct Portfolio Client",
+        },
+        loan: {
+          productId: "personal-loan",
+          productName: "Personal Loan",
+          amount: loan.principalAmount,
+          tenureMonths: loan.tenureMonths,
+          purpose: "Direct Client Loan Facility",
+          repaymentFrequency: loan.repaymentFrequency || "MONTHLY",
+          proposedDisbursementDate: loan.disbursementDate,
+          proposedInterestRateAnnual: rate,
+          proposedProcessingFeePercent: 1.5,
+          calculationMethod: "REDUCING_BALANCE",
+          estimatedEMI: emi,
+          estimatedTotalPayable: loan.totalPayable || totalPayable,
+        },
+        kyc: {
+          documentType: "AADHAAR",
+          documentNumber: "Direct Officer Verified",
+          panNumber: "Direct Officer Verified",
+        },
+        income: {
+          occupationType: "SALARIED",
+          monthlyIncome: loan.principalAmount * 2,
+          primaryBankName: "Direct Disbursal",
+          primaryAccountNumber: "Direct Client Account",
+          ifscCode: "INST00001",
+          disbursementMode: "BANK_TRANSFER",
+        },
+        guarantor: {
+          hasGuarantor: false,
+        },
+        documents: [],
+        agreementId: loan.agreementId,
+        status: loan.status === "PAID" ? "APPROVED" : "ACTIVE",
+        statusHistory: [
+          {
+            status: "ACTIVE",
+            changedBy: "Advith Nayak (Admin)",
+            changedAt: now,
+            note: `Direct Client Disbursal. Loan Account: ${loan.loanId}`,
+          },
+        ],
+        adminNotes: [],
+        messages: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      this.applications.unshift(synthesizedApp);
+      this.saveToFile();
+      return synthesizedApp;
+    }
+
+    return undefined;
   }
 
   public findApplicationForCustomer(

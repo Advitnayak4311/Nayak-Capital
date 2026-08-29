@@ -60,7 +60,10 @@ export default function ApplicationDetailPage() {
   const fetchApplication = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/applications/${applicationId}`);
+      const res = await fetch(`/api/applications/${applicationId}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (res.ok && data.success) {
         setApplication(data.application);
