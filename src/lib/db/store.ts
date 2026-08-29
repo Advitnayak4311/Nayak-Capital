@@ -12,8 +12,11 @@ import {
 import { generateApplicationId, generateAgreementId, generateLoanId, calculateEMI } from "@/lib/utils";
 
 // Path to persistent JSON database file
-const DATA_DIR = path.join(process.cwd(), "data");
+// On Vercel / serverless environments, /tmp is the only writable filesystem directory
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DATA_DIR = isServerless ? "/tmp" : path.join(process.cwd(), "data");
 const DB_FILE = path.join(DATA_DIR, "database.json");
+const BUNDLED_DB_FILE = path.join(process.cwd(), "data", "database.json");
 
 interface DatabaseSchema {
   applications: LoanApplication[];
@@ -49,21 +52,36 @@ class DataStore {
 
   private loadFromFile(): void {
     try {
-      if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, "utf-8");
+      let targetFile = DB_FILE;
+      if (!fs.existsSync(DB_FILE) && fs.existsSync(BUNDLED_DB_FILE)) {
+        targetFile = BUNDLED_DB_FILE;
+      }
+
+      if (fs.existsSync(targetFile)) {
+        const raw = fs.readFileSync(targetFile, "utf-8");
         if (raw && raw.trim()) {
           const parsed: DatabaseSchema = JSON.parse(raw);
-          this.applications = Array.isArray(parsed.applications) ? parsed.applications : [];
-          this.agreements = Array.isArray(parsed.agreements) ? parsed.agreements : [];
-          this.loans = Array.isArray(parsed.loans) ? parsed.loans : [];
-          this.auditLogs = Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [];
-          this.emailLogs = Array.isArray(parsed.emailLogs) ? parsed.emailLogs : [];
+          if (Array.isArray(parsed.applications) && parsed.applications.length > 0) {
+            this.applications = parsed.applications;
+          }
+          if (Array.isArray(parsed.agreements) && parsed.agreements.length > 0) {
+            this.agreements = parsed.agreements;
+          }
+          if (Array.isArray(parsed.loans) && parsed.loans.length > 0) {
+            this.loans = parsed.loans;
+          }
+          if (Array.isArray(parsed.auditLogs) && parsed.auditLogs.length > 0) {
+            this.auditLogs = parsed.auditLogs;
+          }
+          if (Array.isArray(parsed.emailLogs) && parsed.emailLogs.length > 0) {
+            this.emailLogs = parsed.emailLogs;
+          }
           this.isLoaded = true;
           return;
         }
       }
     } catch (err) {
-      console.warn("Error reading from database.json, starting fresh:", err);
+      console.warn("Error reading from database.json, keeping in-memory state:", err);
     }
     this.isLoaded = true;
   }
@@ -80,12 +98,14 @@ class DataStore {
       };
       fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), "utf-8");
     } catch (err) {
-      console.error("Error writing to database.json:", err);
+      console.warn("Notice: Operating with in-memory persistence:", err);
     }
   }
 
   private sync(): void {
-    this.loadFromFile();
+    if (!this.isLoaded) {
+      this.loadFromFile();
+    }
   }
 
   // ---------------- Applications ----------------
